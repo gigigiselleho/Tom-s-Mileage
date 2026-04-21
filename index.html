@@ -92,7 +92,7 @@
 
         window.generateReport = () => {
             if (!window.allRecords || window.allRecords.length === 0) return alert('目前沒有紀錄！');
-            let csvContent = "\uFEFF日期,由 (From),到 (To),用途,起始KM,結束KM,總里程\n";
+            let csvContent = "\uFEFF日期,From,To,用途,起始KM,結束KM,總里程\n";
             // 報告導出按日期順序
             [...window.allRecords].sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(r => {
                 csvContent += `${r.date},${r.from},${r.to},${r.purpose},${r.start},${r.end},${r.total}\n`;
@@ -123,10 +123,10 @@
                 <select id="purposeSelect" onchange="toggleOtherInput()" class="mt-1 block w-full border rounded-md p-2 bg-white w-full text-base">
                     <option value="Part time">Part time</option><option value="Freelance">Freelance</option><option value="Other">Other</option>
                 </select>
-                <input type="text" id="otherPurpose" placeholder="請註明用途" class="hidden mt-2 block w-full border rounded-md p-2 bg-yellow-50 w-full text-base">
+                <input type="text" id="otherPurpose" placeholder="Please specific" class="hidden mt-2 block w-full border rounded-md p-2 bg-yellow-50 w-full text-base">
             </div>
-            <div><label class="block text-xs font-bold text-gray-500 uppercase">由 (From)</label><input type="text" id="fromLoc" required class="mt-1 block w-full border rounded-md p-2 w-full text-base"></div>
-            <div><label class="block text-xs font-bold text-gray-500 uppercase">到 (To)</label><input type="text" id="toLoc" required class="mt-1 block w-full border rounded-md p-2 w-full text-base"></div>
+            <div><label class="block text-xs font-bold text-gray-500 uppercase">From</label><input type="text" id="fromLoc" required class="mt-1 block w-full border rounded-md p-2 w-full text-base"></div>
+            <div><label class="block text-xs font-bold text-gray-500 uppercase">To</label><input type="text" id="toLoc" required class="mt-1 block w-full border rounded-md p-2 w-full text-base"></div>
             <div><label class="block text-xs font-bold text-gray-500 uppercase">Start KM</label><input type="number" id="startKm" required class="mt-1 block w-full border rounded-md p-2 w-full text-base"></div>
             <div><label class="block text-xs font-bold text-gray-500 uppercase">End KM</label><input type="number" id="endKm" required class="mt-1 block w-full border rounded-md p-2 w-full text-base"></div>
             <div class="md:col-span-2"><button type="submit" class="w-full bg-blue-700 text-white font-black py-4 rounded-md mt-2 text-xl shadow-lg hover:bg-blue-800 active:transform active:scale-95 transition-all uppercase tracking-widest">Add to Cloud</button></div>
