@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mileage Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-5">
+    <div class="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800"> Tom Tom Mileage Record🚗 </h1>
+        
+        <form id="mileageForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">日期</label>
+                <input type="date" id="date" required class="mt-1 block w-full border rounded-md p-2">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">用途 (Purpose)</label>
+                <select id="purposeSelect" onchange="toggleOtherInput()" class="mt-1 block w-full border rounded-md p-2 bg-white">
+                    <option value="Part time">Part time</option>
+                    <option value="Freelance">Freelance</option>
+                    <option value="Other">Other (請註明)</option>
+                </select>
+                <input type="text" id="otherPurpose" placeholder="請輸入用途" class="hidden mt-2 block w-full border rounded-md p-2 bg-yellow-50">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">起始公里 (Start KM)</label>
+                <input type="number" id="startKm" required class="mt-1 block w-full border rounded-md p-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">結束公里 (End KM)</label>
+                <input type="number" id="endKm" required class="mt-1 block w-full border rounded-md p-2">
+            </div>
+            <div class="md:col-span-2">
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded-md hover:bg-blue-700 transition">新增紀錄</button>
+            </div>
+        </form>
+
+        <hr class="mb-8">
+
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold">歷史紀錄</h2>
+            <button onclick="generateReport()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">下載年終 CSV 報告</button>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">日期</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">用途</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">總里數</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="recordTable" class="divide-y divide-gray-200"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('mileageForm');
+        const tableBody = document.getElementById('recordTable');
+        const purposeSelect = document.getElementById('purposeSelect');
+        const otherInput = document.getElementById('otherPurpose');
+        
+        let records = JSON.parse(localStorage.getItem('mileageRecords')) || [];
+        renderRecords();
+
+        // 處理 Dropdown 變動
+        function toggleOtherInput() {
+            if (purposeSelect.value === 'Other') {
+                otherInput.classList.remove('hidden');
+                otherInput.required = true;
+            } else {
+                otherInput.classList.add('hidden');
+                otherInput.required = false;
+            }
+        }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            // 決定最終用途文字
+            let finalPurpose = purposeSelect.value;
+            if (finalPurpose === 'Other') {
+                finalPurpose = `Other: ${otherInput.value}`;
+            }
+            
+            const newRecord = {
+                id: Date.now(),
+                date: document.getElementById('date').value,
+                purpose: finalPurpose,
+                start: parseFloat(document.getElementById('startKm').value),
+                end: parseFloat(document.getElementById('endKm').value),
+                total: parseFloat(document.getElementById('endKm').value) - parseFloat(document.getElementById('startKm').value)
+            };
+
+            records.push(newRecord);
+            localStorage.setItem('mileageRecords', JSON.stringify(records));
+            renderRecords();
+            form.reset();
+            otherInput.classList.add('hidden'); // 重設輸入框
+        });
+
+        function renderRecords() {
+            tableBody.innerHTML = '';
+            records.forEach(record => {
+                const row = `<tr>
+                    <td class="px-4 py-2">${record.date}</td>
+                    <td class="px-4 py-2">${record.purpose}</td>
+                    <td class="px-4 py-2 font-bold">${record.total} km</td>
+                    <td class="px-4 py-2"><button onclick="deleteRecord(${record.id})" class="text-red-500 hover:underline">刪除</button></td>
+                </tr>`;
+                tableBody.innerHTML += row;
+            });
+        }
+
+        function deleteRecord(id) {
+            if(confirm('確定要刪除這條紀錄嗎？')) {
+                records = records.filter(r => r.id !== id);
+                localStorage.setItem('mileageRecords', JSON.stringify(records));
+                renderRecords();
+            }
+        }
+
+        function generateReport() {
+            if (records.length === 0) return alert('目前沒有紀錄！');
+            let csvContent = "\uFEFF日期,用途,起始KM,結束KM,總里程\n"; // \uFEFF 解決 Excel 亂碼
+            records.forEach(r => {
+                csvContent += `${r.date},${r.purpose},${r.start},${r.end},${r.total}\n`;
+            });
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Mileage_Report_${new Date().getFullYear()}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
