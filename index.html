@@ -44,38 +44,43 @@
                 window.allRecords.push({id, ...data});
                 
                 const row = `
-                <tr class="${isOngoing ? 'bg-yellow-50 animate-pulse' : ''}">
+                <tr class="${isOngoing ? 'bg-amber-50 animate-pulse' : ''}">
                     <td class="px-3 py-4 border-b">
-                        <div class="font-bold text-gray-900 text-sm">${data.date}</div>
-                        <div class="text-gray-500 text-xs">${data.purpose}</div>
+                        <div class="font-bold text-slate-900 text-sm">${data.date}</div>
+                        <div class="text-slate-500 text-xs">${data.purpose}</div>
                     </td>
-                    <td class="px-3 py-4 border-b text-gray-600 text-xs text-left">
-                        <span class="font-bold text-gray-400">FROM:</span> ${data.from}<br>
-                        <span class="font-bold text-gray-400">TO:</span> ${isOngoing ? '<span class="text-red-500 font-bold italic">Driving...</span>' : data.to}
+                    <td class="px-3 py-4 border-b text-slate-600 text-xs text-left">
+                        <div class="mb-1"><span class="font-bold text-slate-400">FROM:</span> ${data.from}</div>
+                        <div><span class="font-bold text-slate-400">TO:</span> ${data.to}</div>
                     </td>
-                    <td class="px-3 py-4 border-b text-center text-gray-500 text-xs">
-                        S: ${data.start}<br>E: ${isOngoing ? '--' : data.end}
+                    <td class="px-3 py-4 border-b text-center text-slate-500 text-xs">
+                        S: ${data.start}<br>E: ${isOngoing ? '<span class="text-amber-600 font-bold">---</span>' : data.end}
                     </td>
                     <td class="px-3 py-4 border-b text-center font-bold text-blue-700 bg-blue-50 border-x text-base">
-                        ${isOngoing ? '??' : data.total}
+                        ${isOngoing ? '<span class="text-slate-300 italic text-xs uppercase tracking-tighter">Pending</span>' : data.total}
                     </td>
                     <td class="px-3 py-4 border-b text-center">
-                        ${isOngoing ? `<button onclick="fillEnd('${id}', '${data.from}', ${data.start})" class="bg-orange-500 text-white px-3 py-1 rounded text-xs font-bold mb-2 shadow-sm">Finish</button><br>` : ''}
-                        <button onclick="deleteCloudRecord('${id}')" class="text-red-300 hover:text-red-600 text-lg">✕</button>
+                        ${isOngoing ? `<button onclick="fillEnd('${id}', '${data.from}', '${data.to}', ${data.start})" class="bg-amber-500 text-white px-4 py-1.5 rounded-lg text-xs font-black mb-2 shadow-md hover:bg-amber-600">FINISH</button><br>` : ''}
+                        <button onclick="deleteCloudRecord('${id}')" class="text-slate-300 hover:text-red-500 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
                     </td>
                 </tr>`;
                 tableBody.innerHTML += row;
             });
-            totalYearlyDisplay.innerText = `Total Mileage: ${grandTotal.toFixed(1)} km`;
+            totalYearlyDisplay.innerText = `Total: ${grandTotal.toFixed(1)} km`;
         });
 
-        window.fillEnd = (id, from, start) => {
+        window.fillEnd = (id, from, to, start) => {
             document.getElementById('fromLoc').value = from;
+            document.getElementById('toLoc').value = to;
             document.getElementById('startKm').value = start;
-            document.getElementById('toLoc').focus();
+            document.getElementById('endKm').focus();
             window.editingId = id;
-            submitBtn.innerText = "Finish Trip & Update";
-            submitBtn.classList.replace('bg-blue-700', 'bg-orange-600');
+            submitBtn.innerText = "Complete Trip & Update";
+            submitBtn.classList.replace('bg-blue-700', 'bg-amber-600');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
 
@@ -93,18 +98,17 @@
             try {
                 if (window.editingId) {
                     await updateDoc(doc(db, "records", window.editingId), {
-                        to: to,
                         end: endV,
                         total: endV - startV
                     });
                     window.editingId = null;
-                    submitBtn.innerText = "Start / Add Record";
-                    submitBtn.classList.replace('bg-orange-600', 'bg-blue-700');
+                    submitBtn.innerText = "Start Trip / Add Record";
+                    submitBtn.classList.replace('bg-amber-600', 'bg-blue-700');
                 } else {
                     await addDoc(mileageCol, {
                         date: date,
                         from: from,
-                        to: to || "",
+                        to: to,
                         purpose: finalPurpose,
                         start: startV,
                         end: endV,
@@ -121,19 +125,19 @@
         });
 
         window.deleteCloudRecord = async (id) => {
-            if(confirm('Are you sure to delete this record?')) await deleteDoc(doc(db, "records", id));
+            if(confirm('Delete this record?')) await deleteDoc(doc(db, "records", id));
         };
 
         window.generateReport = () => {
-            if (!window.allRecords || window.allRecords.length === 0) return alert('No records found!');
-            let csvContent = "\uFEFFDate,From,To,Purpose,Start_KM,End_KM,Total_KM\n";
+            if (!window.allRecords || window.allRecords.length === 0) return alert('No records!');
+            let csvContent = "\uFEFFDate,From,To,Purpose,Start,End,Total\n";
             window.allRecords.filter(r => r.end > 0).sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(r => {
                 csvContent += `${r.date},${r.from},${r.to},${r.purpose},${r.start},${r.end},${r.total}\n`;
             });
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", "Mileage_Report_Cloud.csv");
+            link.setAttribute("download", "Mileage_2026_Export.csv");
             link.click();
         };
 
@@ -143,60 +147,60 @@
         };
     </script>
 </head>
-<body class="bg-slate-100 p-4 font-sans text-slate-800">
-    <div class="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow-xl border-t-8 border-blue-600">
-        <h1 class="text-3xl font-black mb-8 text-blue-900 text-center tracking-tight italic">TOM TOM MILEAGE RECORD 🚗</h1>
+<body class="bg-slate-50 p-3 font-sans text-slate-800">
+    <div class="max-w-4xl mx-auto bg-white p-5 rounded-3xl shadow-2xl border-t-8 border-blue-700">
+        <h1 class="text-2xl font-black mb-6 text-blue-900 text-center tracking-tighter italic">TOM TOM MILEAGE 🚗</h1>
         
-        <form id="mileageForm" class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-10 bg-slate-50 p-6 rounded-xl border border-slate-200">
+        <form id="mileageForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 bg-slate-100 p-5 rounded-2xl border border-slate-200">
             <div>
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">Date</label>
-                <input type="date" id="date" required class="mt-1 block w-full border-slate-300 rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</label>
+                <input type="date" id="date" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">Purpose</label>
-                <select id="purposeSelect" onchange="toggleOtherInput()" class="mt-1 block w-full border-slate-300 rounded-lg p-3 bg-white text-base">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Purpose</label>
+                <select id="purposeSelect" onchange="toggleOtherInput()" class="mt-1 block w-full border-slate-300 rounded-xl p-3 bg-white text-base">
                     <option value="Part time">Part time</option>
                     <option value="Freelance">Freelance</option>
-                    <option value="Other">Other (Please specify)</option>
+                    <option value="Other">Other (Specify)</option>
                 </select>
-                <input type="text" id="otherPurpose" placeholder="Enter purpose..." class="hidden mt-2 block w-full border-blue-200 rounded-lg p-3 bg-blue-50 text-base">
+                <input type="text" id="otherPurpose" placeholder="Describe purpose..." class="hidden mt-2 block w-full border-blue-200 rounded-xl p-3 bg-blue-50">
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">From</label>
-                <input type="text" id="fromLoc" placeholder="Origin" required class="mt-1 block w-full border-slate-300 rounded-lg p-3 text-base">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">From</label>
+                <input type="text" id="fromLoc" placeholder="Starting Point" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">To <span class="text-slate-400 font-normal">(Optional)</span></label>
-                <input type="text" id="toLoc" placeholder="Destination" class="mt-1 block w-full border-slate-300 rounded-lg p-3 text-base">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">To</label>
+                <input type="text" id="toLoc" placeholder="Destination" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">Start KM</label>
-                <input type="number" id="startKm" placeholder="e.g. 50120" required class="mt-1 block w-full border-slate-300 rounded-lg p-3 text-base">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Start KM</label>
+                <input type="number" id="startKm" placeholder="Current Odometer" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">End KM <span class="text-slate-400 font-normal">(Optional)</span></label>
-                <input type="number" id="endKm" placeholder="e.g. 50135" class="mt-1 block w-full border-slate-300 rounded-lg p-3 text-base">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">End KM <span class="text-slate-300 font-normal">(Fill later)</span></label>
+                <input type="number" id="endKm" placeholder="Final Odometer" class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
             </div>
             <div class="md:col-span-2 pt-2">
-                <button type="submit" id="submitBtn" class="w-full bg-blue-700 text-white font-black py-4 rounded-xl text-xl shadow-lg hover:bg-blue-800 active:scale-95 transition-all uppercase tracking-widest">Start / Add Record</button>
+                <button type="submit" id="submitBtn" class="w-full bg-blue-700 text-white font-black py-4 rounded-2xl text-lg shadow-xl hover:bg-blue-800 transition-all uppercase tracking-widest">Start Trip / Add Record</button>
             </div>
         </form>
 
         <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-            <h2 class="text-xl font-bold text-slate-700">📊 Cloud Activity</h2>
-            <div id="totalYearly" class="text-blue-900 font-black bg-blue-100 px-6 py-3 rounded-full border-2 border-blue-200 shadow-sm">Total Mileage: 0 km</div>
-            <button onclick="generateReport()" class="bg-emerald-600 text-white px-8 py-3 rounded-full font-bold shadow-md hover:bg-emerald-700 transition-colors uppercase text-sm tracking-tighter">Export CSV</button>
+            <h2 class="text-lg font-black text-slate-700 uppercase tracking-tight">🚗🚗2026 record</h2>
+            <div id="totalYearly" class="text-blue-900 font-black bg-blue-50 px-5 py-2.5 rounded-full border border-blue-100 text-sm">TOTAL: 0 km</div>
+            <button onclick="generateReport()" class="bg-slate-800 text-white px-6 py-2 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-black transition-all">Export</button>
         </div>
 
         <div class="overflow-hidden border border-slate-200 rounded-2xl shadow-sm">
             <table class="min-w-full bg-white text-sm">
-                <thead class="bg-slate-800 text-white text-center uppercase tracking-wider text-xs">
+                <thead class="bg-slate-900 text-white text-center uppercase tracking-widest text-[10px]">
                     <tr>
-                        <th class="px-3 py-4 text-left font-bold">Date / Purpose</th>
-                        <th class="px-3 py-4 text-left font-bold">Route</th>
-                        <th class="px-3 py-4 font-bold">S / E</th>
-                        <th class="px-3 py-4 bg-blue-700 font-bold">Trip</th>
-                        <th class="px-3 py-4">✕</th>
+                        <th class="px-3 py-4 text-left">Info</th>
+                        <th class="px-3 py-4 text-left">Route</th>
+                        <th class="px-3 py-4">KM</th>
+                        <th class="px-3 py-4 bg-blue-800">Trip</th>
+                        <th class="px-3 py-4">Action</th>
                     </tr>
                 </thead>
                 <tbody id="recordTable" class="text-center divide-y divide-slate-100"></tbody>
