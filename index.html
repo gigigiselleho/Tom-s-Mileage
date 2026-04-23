@@ -22,16 +22,19 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const mileageCol = collection(db, "records");
+        const INITIAL_KM = 110597;
 
         const form = document.getElementById('mileageForm');
         const tableBody = document.getElementById('recordTable');
         const totalYearlyDisplay = document.getElementById('totalYearly');
+        const ratioDisplay = document.getElementById('ratioDisplay');
         const submitBtn = document.getElementById('submitBtn');
 
         document.getElementById('date').valueAsDate = new Date();
 
         onSnapshot(query(mileageCol, orderBy("timestamp", "desc")), (snapshot) => {
-            let grandTotal = 0;
+            let totalBusinessKM = 0;
+            let latestEndKM = INITIAL_KM;
             tableBody.innerHTML = '';
             window.allRecords = [];
             
@@ -40,7 +43,10 @@
                 const id = doc.id;
                 const isOngoing = !data.end || data.end === 0;
                 
-                if (!isOngoing) grandTotal += data.total;
+                if (!isOngoing) {
+                    totalBusinessKM += data.total;
+                    if (data.end > latestEndKM) latestEndKM = data.end;
+                }
                 window.allRecords.push({id, ...data});
                 
                 const row = `
@@ -50,86 +56,93 @@
                         <div class="text-slate-500 text-xs">${data.purpose}</div>
                     </td>
                     <td class="px-3 py-4 border-b text-slate-600 text-xs text-left">
-                        <div class="mb-1"><span class="font-bold text-slate-400">FROM:</span> ${data.from}</div>
-                        <div><span class="font-bold text-slate-400">TO:</span> ${data.to}</div>
+                        <div class="mb-1 font-medium"><span class="text-slate-400">FROM:</span> ${data.from}</div>
+                        <div class="font-medium"><span class="text-slate-400">TO:</span> ${data.to}</div>
                     </td>
                     <td class="px-3 py-4 border-b text-center text-slate-500 text-xs">
-                        S: ${data.start}<br>E: ${isOngoing ? '<span class="text-amber-600 font-bold">---</span>' : data.end}
+                        S: ${data.start}<br>E: ${isOngoing ? '---' : data.end}
                     </td>
                     <td class="px-3 py-4 border-b text-center font-bold text-blue-700 bg-blue-50 border-x text-base">
-                        ${isOngoing ? '<span class="text-slate-300 italic text-xs uppercase tracking-tighter">Pending</span>' : data.total}
+                        ${isOngoing ? '<span class="text-slate-300 italic text-[10px]">PENDING</span>' : data.total}
                     </td>
                     <td class="px-3 py-4 border-b text-center">
-                        ${isOngoing ? `<button onclick="fillEnd('${id}', '${data.from}', '${data.to}', ${data.start})" class="bg-amber-500 text-white px-4 py-1.5 rounded-lg text-xs font-black mb-2 shadow-md hover:bg-amber-600">FINISH</button><br>` : ''}
-                        <button onclick="deleteCloudRecord('${id}')" class="text-slate-300 hover:text-red-500 transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                        </button>
+                        <div class="flex flex-col items-center gap-2">
+                            ${isOngoing ? `<button onclick="fillEnd('${id}', '${data.from}', '${data.to}', ${data.start})" class="bg-amber-500 text-white px-3 py-1 rounded-lg text-[10px] font-black shadow-md">FINISH</button>` : ''}
+                            <div class="flex gap-3 mt-1">
+                                <button onclick="editRecord('${id}')" class="text-slate-400 hover:text-blue-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor font-bold"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                </button>
+                                <button onclick="deleteCloudRecord('${id}')" class="text-slate-400 hover:text-red-500">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor font-bold"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            </div>
+                        </div>
                     </td>
                 </tr>`;
                 tableBody.innerHTML += row;
             });
-            totalYearlyDisplay.innerText = `Total: ${grandTotal.toFixed(1)} km`;
+
+            // Calculate Ratio
+            const totalDriven = latestEndKM - INITIAL_KM;
+            const ratio = totalDriven > 0 ? ((totalBusinessKM / totalDriven) * 100).toFixed(1) : 0;
+
+            totalYearlyDisplay.innerText = `Business: ${totalBusinessKM.toFixed(1)} km`;
+            ratioDisplay.innerText = `Ratio: ${ratio}%`;
         });
 
-        window.fillEnd = (id, from, to, start) => {
-            document.getElementById('fromLoc').value = from;
-            document.getElementById('toLoc').value = to;
-            document.getElementById('startKm').value = start;
-            document.getElementById('endKm').focus();
+        window.editRecord = (id) => {
+            const record = window.allRecords.find(r => r.id === id);
+            if (!record) return;
+            document.getElementById('date').value = record.date;
+            document.getElementById('fromLoc').value = record.from;
+            document.getElementById('toLoc').value = record.to;
+            document.getElementById('startKm').value = record.start;
+            document.getElementById('endKm').value = record.end || "";
+            document.getElementById('purposeSelect').value = record.purpose.includes("Other:") ? "Other" : record.purpose;
             window.editingId = id;
-            submitBtn.innerText = "Complete Trip & Update";
-            submitBtn.classList.replace('bg-blue-700', 'bg-amber-600');
+            submitBtn.innerText = "Update Record";
+            submitBtn.classList.replace('bg-blue-700', 'bg-blue-500');
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        window.fillEnd = (id, from, to, start) => {
+            editRecord(id);
+            document.getElementById('endKm').focus();
+            submitBtn.innerText = "Finish Trip & Update";
+            submitBtn.classList.replace('bg-blue-500', 'bg-amber-600');
         };
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const date = document.getElementById('date').value;
-            const from = document.getElementById('fromLoc').value;
-            const to = document.getElementById('toLoc').value;
-            const startV = parseFloat(document.getElementById('startKm').value);
-            const endV = parseFloat(document.getElementById('endKm').value) || 0;
-            const purposeSelect = document.getElementById('purposeSelect');
-            const otherInput = document.getElementById('otherPurpose');
-            let finalPurpose = purposeSelect.value === 'Other' ? otherInput.value : purposeSelect.value;
+            const data = {
+                date: document.getElementById('date').value,
+                from: document.getElementById('fromLoc').value,
+                to: document.getElementById('toLoc').value,
+                start: parseFloat(document.getElementById('startKm').value),
+                end: parseFloat(document.getElementById('endKm').value) || 0,
+                purpose: document.getElementById('purposeSelect').value === 'Other' ? document.getElementById('otherPurpose').value : document.getElementById('purposeSelect').value
+            };
+            data.total = data.end ? (data.end - data.start) : 0;
 
             try {
                 if (window.editingId) {
-                    await updateDoc(doc(db, "records", window.editingId), {
-                        end: endV,
-                        total: endV - startV
-                    });
+                    await updateDoc(doc(db, "records", window.editingId), data);
                     window.editingId = null;
-                    submitBtn.innerText = "Start Trip / Add Record";
-                    submitBtn.classList.replace('bg-amber-600', 'bg-blue-700');
                 } else {
-                    await addDoc(mileageCol, {
-                        date: date,
-                        from: from,
-                        to: to,
-                        purpose: finalPurpose,
-                        start: startV,
-                        end: endV,
-                        total: endV ? (endV - startV) : 0,
-                        timestamp: Date.now()
-                    });
+                    await addDoc(mileageCol, { ...data, timestamp: Date.now() });
                 }
                 form.reset();
                 document.getElementById('date').valueAsDate = new Date();
-                otherInput.classList.add('hidden');
-            } catch (err) {
-                alert("Error: " + err.message);
-            }
+                submitBtn.innerText = "Start Trip / Add Record";
+                submitBtn.className = "w-full bg-blue-700 text-white font-black py-4 rounded-2xl text-lg shadow-xl uppercase tracking-widest";
+            } catch (err) { alert("Error: " + err.message); }
         });
 
         window.deleteCloudRecord = async (id) => {
-            if(confirm('Delete this record?')) await deleteDoc(doc(db, "records", id));
+            if(confirm('Delete record?')) await deleteDoc(doc(db, "records", id));
         };
 
         window.generateReport = () => {
-            if (!window.allRecords || window.allRecords.length === 0) return alert('No records!');
             let csvContent = "\uFEFFDate,From,To,Purpose,Start,End,Total\n";
             window.allRecords.filter(r => r.end > 0).sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(r => {
                 csvContent += `${r.date},${r.from},${r.to},${r.purpose},${r.start},${r.end},${r.total}\n`;
@@ -137,71 +150,48 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", "Mileage_2026_Export.csv");
+            link.setAttribute("download", "Mileage_Report_2026.csv");
             link.click();
         };
 
         window.toggleOtherInput = () => {
-            const ps = document.getElementById('purposeSelect'), oi = document.getElementById('otherPurpose');
-            oi.classList.toggle('hidden', ps.value !== 'Other');
+            document.getElementById('otherPurpose').classList.toggle('hidden', document.getElementById('purposeSelect').value !== 'Other');
         };
     </script>
 </head>
 <body class="bg-slate-50 p-3 font-sans text-slate-800">
     <div class="max-w-4xl mx-auto bg-white p-5 rounded-3xl shadow-2xl border-t-8 border-blue-700">
-        <h1 class="text-2xl font-black mb-6 text-blue-900 text-center tracking-tighter italic">TOM TOM MILEAGE 🚗</h1>
+        <h1 class="text-2xl font-black mb-6 text-blue-900 text-center tracking-tighter italic uppercase">Tom Tom Mileage 2026</h1>
         
         <form id="mileageForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 bg-slate-100 p-5 rounded-2xl border border-slate-200">
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</label>
-                <input type="date" id="date" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
-            </div>
+            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</label><input type="date" id="date" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base"></div>
             <div>
                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Purpose</label>
                 <select id="purposeSelect" onchange="toggleOtherInput()" class="mt-1 block w-full border-slate-300 rounded-xl p-3 bg-white text-base">
-                    <option value="Part time">Part time</option>
-                    <option value="Freelance">Freelance</option>
-                    <option value="Other">Other (Specify)</option>
+                    <option value="Part time">Part time</option><option value="Freelance">Freelance</option><option value="Other">Other (Specify)</option>
                 </select>
-                <input type="text" id="otherPurpose" placeholder="Describe purpose..." class="hidden mt-2 block w-full border-blue-200 rounded-xl p-3 bg-blue-50">
+                <input type="text" id="otherPurpose" placeholder="Describe..." class="hidden mt-2 block w-full border-blue-200 rounded-xl p-3 bg-blue-50">
             </div>
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">From</label>
-                <input type="text" id="fromLoc" placeholder="Starting Point" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
-            </div>
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">To</label>
-                <input type="text" id="toLoc" placeholder="Destination" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
-            </div>
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Start KM</label>
-                <input type="number" id="startKm" placeholder="Current Odometer" required class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
-            </div>
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">End KM <span class="text-slate-300 font-normal">(Fill later)</span></label>
-                <input type="number" id="endKm" placeholder="Final Odometer" class="mt-1 block w-full border-slate-300 rounded-xl p-3 text-base">
-            </div>
-            <div class="md:col-span-2 pt-2">
-                <button type="submit" id="submitBtn" class="w-full bg-blue-700 text-white font-black py-4 rounded-2xl text-lg shadow-xl hover:bg-blue-800 transition-all uppercase tracking-widest">Start Trip / Add Record</button>
-            </div>
+            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">From</label><input type="text" id="fromLoc" required class="mt-1 block w-full border-slate-300 rounded-xl p-3"></div>
+            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">To</label><input type="text" id="toLoc" required class="mt-1 block w-full border-slate-300 rounded-xl p-3"></div>
+            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Start KM</label><input type="number" id="startKm" required class="mt-1 block w-full border-slate-300 rounded-xl p-3"></div>
+            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">End KM</label><input type="number" id="endKm" class="mt-1 block w-full border-slate-300 rounded-xl p-3"></div>
+            <div class="md:col-span-2 pt-2"><button type="submit" id="submitBtn" class="w-full bg-blue-700 text-white font-black py-4 rounded-2xl text-lg shadow-xl uppercase tracking-widest">Start Trip / Add Record</button></div>
         </form>
 
         <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-            <h2 class="text-lg font-black text-slate-700 uppercase tracking-tight">🚗🚗2026 record</h2>
-            <div id="totalYearly" class="text-blue-900 font-black bg-blue-50 px-5 py-2.5 rounded-full border border-blue-100 text-sm">TOTAL: 0 km</div>
-            <button onclick="generateReport()" class="bg-slate-800 text-white px-6 py-2 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-black transition-all">Export</button>
+            <h2 class="text-lg font-black text-slate-700 uppercase">🚗 2026 Records</h2>
+            <div class="flex gap-2">
+                <div id="totalYearly" class="text-blue-900 font-black bg-blue-50 px-4 py-2 rounded-full border border-blue-100 text-xs shadow-sm">Business: 0 km</div>
+                <div id="ratioDisplay" class="text-emerald-700 font-black bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 text-xs shadow-sm">Ratio: 0%</div>
+            </div>
+            <button onclick="generateReport()" class="bg-slate-800 text-white px-6 py-2 rounded-full font-bold text-[10px] uppercase tracking-widest">Export</button>
         </div>
 
         <div class="overflow-hidden border border-slate-200 rounded-2xl shadow-sm">
             <table class="min-w-full bg-white text-sm">
                 <thead class="bg-slate-900 text-white text-center uppercase tracking-widest text-[10px]">
-                    <tr>
-                        <th class="px-3 py-4 text-left">Info</th>
-                        <th class="px-3 py-4 text-left">Route</th>
-                        <th class="px-3 py-4">KM</th>
-                        <th class="px-3 py-4 bg-blue-800">Trip</th>
-                        <th class="px-3 py-4">Action</th>
-                    </tr>
+                    <tr><th class="px-3 py-4 text-left">Info</th><th class="px-3 py-4 text-left">Route</th><th class="px-3 py-4">KM</th><th class="px-3 py-4 bg-blue-800">Trip</th><th class="px-3 py-4">Action</th></tr>
                 </thead>
                 <tbody id="recordTable" class="text-center divide-y divide-slate-100"></tbody>
             </table>
