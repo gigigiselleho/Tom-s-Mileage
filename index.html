@@ -32,23 +32,32 @@
 
         document.getElementById('date').valueAsDate = new Date();
 
-        // 監聽數據變化
         onSnapshot(query(mileageCol), (snapshot) => {
             let totalBusinessKM = 0;
             let latestEndKM = INITIAL_KM;
-            let allRecords = [];
+            let rawData = [];
             
             snapshot.forEach((doc) => {
                 const data = doc.data();
-                allRecords.push({ id: doc.id, ...data });
+                rawData.push({ id: doc.id, ...data });
                 if (data.end && data.end > 0) {
                     totalBusinessKM += (data.end - data.start);
                     if (data.end > latestEndKM) latestEndKM = data.end;
                 }
             });
 
-            // 核心排序邏輯：1. 未完成排最前 2. 已完成按 Ending KM 降序
-            allRecords.sort((a, b) => {
+            // 1. 邏輯處理：先按時間由舊到新排，用來檢查 KM 斷軌 (Gap)
+            rawData.sort((a, b) => new Date(a.date) - new Date(b.date) || a.timestamp - b.timestamp);
+            
+            let lastEnding = INITIAL_KM;
+            let processedRecords = rawData.map(rec => {
+                const hasGap = rec.start > lastEnding;
+                if (rec.end && rec.end > 0) lastEnding = rec.end;
+                return { ...rec, hasGap };
+            });
+
+            // 2. 顯示處理：未完成排最前，已完成按 Ending KM 降序
+            processedRecords.sort((a, b) => {
                 const aFinished = a.end && a.end > 0;
                 const bFinished = b.end && b.end > 0;
                 if (!aFinished && bFinished) return -1;
@@ -56,15 +65,20 @@
                 return b.end - a.end; 
             });
 
-            window.allRecords = allRecords; 
+            window.allRecords = processedRecords; 
             tableBody.innerHTML = '';
             
-            allRecords.forEach((data) => {
+            processedRecords.forEach((data) => {
                 const id = data.id;
                 const isOngoing = !data.end || data.end === 0;
                 
+                // 行背景顏色邏輯
+                let rowBg = "bg-white";
+                if (isOngoing) rowBg = "bg-amber-50 animate-pulse";
+                else if (data.hasGap) rowBg = "bg-red-100"; // 紅色 Highlight 斷軌
+
                 const row = `
-                <tr class="${isOngoing ? 'bg-amber-50 animate-pulse' : ''}">
+                <tr class="${rowBg} transition-colors">
                     <td class="px-3 py-4 border-b">
                         <div class="font-bold text-slate-900 text-sm">${data.date}</div>
                         <div class="text-slate-500 text-xs">${data.purpose}</div>
@@ -75,8 +89,9 @@
                     </td>
                     <td class="px-3 py-4 border-b text-center text-slate-500 text-xs">
                         S: ${data.start}<br>E: ${isOngoing ? '---' : data.end}
+                        ${data.hasGap ? '<br><span class="text-red-600 font-bold text-[9px] leading-tight">⚠️ GAP DETECTED</span>' : ''}
                     </td>
-                    <td class="px-3 py-4 border-b text-center font-bold text-blue-700 bg-blue-50 border-x text-base">
+                    <td class="px-3 py-4 border-b text-center font-bold text-blue-700 ${data.hasGap ? 'bg-red-200' : 'bg-blue-50'} border-x text-base">
                         ${isOngoing ? '<span class="text-amber-600 italic text-[10px]">IN PROGRESS</span>' : (data.end - data.start).toFixed(1)}
                     </td>
                     <td class="px-3 py-4 border-b text-center">
@@ -96,7 +111,6 @@
                 tableBody.innerHTML += row;
             });
 
-            // 計算 Business Mileage Ratio
             const totalDriven = latestEndKM - INITIAL_KM;
             const ratio = totalDriven > 0 ? ((totalBusinessKM / totalDriven) * 100).toFixed(1) : 0;
 
