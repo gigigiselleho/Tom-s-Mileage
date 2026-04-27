@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -46,22 +46,21 @@
                 }
             });
 
-            // 1. 核心邏輯：先按時間物理順序排序（由舊到新），用來對比里程連續性
+            // 1. 物理順序排序 (Oldest -> Newest) 以便檢查里程前後邏輯
             rawData.sort((a, b) => new Date(a.date) - new Date(b.date) || a.timestamp - b.timestamp);
             
             let lastEndingRef = INITIAL_KM;
             let processedRecords = rawData.map(rec => {
-                // 檢查合理性：當前起點 > 任何上一筆的終點 = 斷軌
-                const hasGap = rec.start > lastEndingRef;
+                // 🔴 新邏輯：如果 Start KM 小於上一筆 Ending，就是不正常 (Overlap)
+                const isAbnormal = rec.start < lastEndingRef;
                 
-                // 只有已完成的行程才更新下一次對比的基準點
                 if (rec.end && rec.end > 0) {
                     lastEndingRef = rec.end;
                 }
-                return { ...rec, hasGap };
+                return { ...rec, isAbnormal };
             });
 
-            // 2. 顯示排序：Pending 放在最頂，其餘按公里數降序排列
+            // 2. 顯示排序 (Pending 優先, 然後 End KM 降序)
             processedRecords.sort((a, b) => {
                 const aFinished = a.end && a.end > 0;
                 const bFinished = b.end && b.end > 0;
@@ -77,10 +76,10 @@
                 const id = data.id;
                 const isOngoing = !data.end || data.end === 0;
                 
-                // 決定顏色：斷軌則顯示淺紅色背景
+                // 背景顏色：不正常則紅，進行中則黃，正常則白
                 let rowBg = "bg-white";
                 if (isOngoing) rowBg = "bg-amber-50 animate-pulse";
-                else if (data.hasGap) rowBg = "bg-red-100"; 
+                else if (data.isAbnormal) rowBg = "bg-red-100"; 
 
                 const row = `
                 <tr class="${rowBg} transition-colors">
@@ -94,9 +93,9 @@
                     </td>
                     <td class="px-3 py-4 border-b text-center text-slate-500 text-xs">
                         S: ${data.start}<br>E: ${isOngoing ? '---' : data.end}
-                        ${(!isOngoing && data.hasGap) ? '<br><span class="text-red-600 font-bold text-[9px]">⚠️ GAP</span>' : ''}
+                        ${(!isOngoing && data.isAbnormal) ? '<br><span class="text-red-600 font-bold text-[9px]">⚠️ OVERLAP</span>' : ''}
                     </td>
-                    <td class="px-3 py-4 border-b text-center font-bold text-blue-700 ${(!isOngoing && data.hasGap) ? 'bg-red-200' : 'bg-blue-50'} border-x text-base">
+                    <td class="px-3 py-4 border-b text-center font-bold text-blue-700 ${(!isOngoing && data.isAbnormal) ? 'bg-red-200' : 'bg-blue-50'} border-x text-base">
                         ${isOngoing ? '<span class="text-amber-600 italic text-[10px]">PENDING</span>' : (data.end - data.start).toFixed(1)}
                     </td>
                     <td class="px-3 py-4 border-b text-center">
