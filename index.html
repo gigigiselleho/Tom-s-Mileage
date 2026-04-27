@@ -46,17 +46,22 @@
                 }
             });
 
-            // 1. 邏輯處理：先按時間由舊到新排，用來檢查 KM 斷軌 (Gap)
+            // 1. Logic Sorting: Oldest to Newest to check for Mileage Gaps
             rawData.sort((a, b) => new Date(a.date) - new Date(b.date) || a.timestamp - b.timestamp);
             
             let lastEnding = INITIAL_KM;
             let processedRecords = rawData.map(rec => {
+                // RULE: Only red if CURRENT START > PREVIOUS ENDING
                 const hasGap = rec.start > lastEnding;
-                if (rec.end && rec.end > 0) lastEnding = rec.end;
+                
+                // Only update the reference point if the trip is finished
+                if (rec.end && rec.end > 0) {
+                    lastEnding = rec.end;
+                }
                 return { ...rec, hasGap };
             });
 
-            // 2. 顯示處理：未完成排最前，已完成按 Ending KM 降序
+            // 2. Display Sorting: Pending trips first, then Ending KM Descending
             processedRecords.sort((a, b) => {
                 const aFinished = a.end && a.end > 0;
                 const bFinished = b.end && b.end > 0;
@@ -72,10 +77,13 @@
                 const id = data.id;
                 const isOngoing = !data.end || data.end === 0;
                 
-                // 行背景顏色邏輯
+                // Styling Logic
                 let rowBg = "bg-white";
-                if (isOngoing) rowBg = "bg-amber-50 animate-pulse";
-                else if (data.hasGap) rowBg = "bg-red-100"; // 紅色 Highlight 斷軌
+                if (isOngoing) {
+                    rowBg = "bg-amber-50 animate-pulse";
+                } else if (data.hasGap) {
+                    rowBg = "bg-red-100"; // Highlight if Start > Prev End
+                }
 
                 const row = `
                 <tr class="${rowBg} transition-colors">
@@ -89,19 +97,19 @@
                     </td>
                     <td class="px-3 py-4 border-b text-center text-slate-500 text-xs">
                         S: ${data.start}<br>E: ${isOngoing ? '---' : data.end}
-                        ${data.hasGap ? '<br><span class="text-red-600 font-bold text-[9px] leading-tight">⚠️ GAP DETECTED</span>' : ''}
+                        ${(!isOngoing && data.hasGap) ? '<br><span class="text-red-600 font-bold text-[9px]">⚠️ GAP</span>' : ''}
                     </td>
-                    <td class="px-3 py-4 border-b text-center font-bold text-blue-700 ${data.hasGap ? 'bg-red-200' : 'bg-blue-50'} border-x text-base">
-                        ${isOngoing ? '<span class="text-amber-600 italic text-[10px]">IN PROGRESS</span>' : (data.end - data.start).toFixed(1)}
+                    <td class="px-3 py-4 border-b text-center font-bold text-blue-700 ${(!isOngoing && data.hasGap) ? 'bg-red-200' : 'bg-blue-50'} border-x text-base">
+                        ${isOngoing ? '<span class="text-amber-600 italic text-[10px]">PENDING</span>' : (data.end - data.start).toFixed(1)}
                     </td>
                     <td class="px-3 py-4 border-b text-center">
                         <div class="flex flex-col items-center gap-2">
                             ${isOngoing ? `<button onclick="fillEnd('${id}')" class="bg-amber-500 text-white w-full py-1 rounded shadow-sm text-[10px] font-black uppercase">Finish</button>` : ''}
                             <div class="flex gap-2">
-                                <button onclick="editRecord('${id}')" class="bg-blue-600 text-white p-2 rounded-lg shadow-sm hover:bg-blue-700 transition-colors">
+                                <button onclick="editRecord('${id}')" class="bg-blue-600 text-white p-2 rounded-lg shadow-sm hover:bg-blue-700 transition-all">
                                     <span class="text-sm">✎</span>
                                 </button>
-                                <button onclick="deleteCloudRecord('${id}')" class="bg-red-500 text-white p-2 rounded-lg shadow-sm hover:bg-red-600 transition-colors">
+                                <button onclick="deleteCloudRecord('${id}')" class="bg-red-500 text-white p-2 rounded-lg shadow-sm hover:bg-red-600 transition-all">
                                     <span class="text-sm">❌</span>
                                 </button>
                             </div>
@@ -111,6 +119,7 @@
                 tableBody.innerHTML += row;
             });
 
+            // Ratio calculation based on initial mileage
             const totalDriven = latestEndKM - INITIAL_KM;
             const ratio = totalDriven > 0 ? ((totalBusinessKM / totalDriven) * 100).toFixed(1) : 0;
 
@@ -166,7 +175,7 @@
         });
 
         window.deleteCloudRecord = async (id) => {
-            if(confirm('Confirm Delete?')) await deleteDoc(doc(db, "records", id));
+            if(confirm('Delete this record?')) await deleteDoc(doc(db, "records", id));
         };
 
         window.generateReport = () => {
@@ -212,13 +221,19 @@
                 <div id="totalYearly" class="text-blue-900 font-black bg-blue-50 px-4 py-2 rounded-full border border-blue-100 text-[10px] shadow-sm">Business: 0 km</div>
                 <div id="ratioDisplay" class="text-emerald-700 font-black bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 text-[10px] shadow-sm">Business Mileage Ratio: 0%</div>
             </div>
-            <button onclick="generateReport()" class="bg-slate-800 text-white px-6 py-2 rounded-full font-bold text-[10px] uppercase tracking-widest">Export</button>
+            <button onclick="generateReport()" class="bg-slate-800 text-white px-6 py-2 rounded-full font-bold text-[10px] uppercase tracking-widest hover:bg-black">Export CSV</button>
         </div>
 
         <div class="overflow-hidden border border-slate-200 rounded-2xl shadow-sm">
             <table class="min-w-full bg-white text-sm">
                 <thead class="bg-slate-900 text-white text-center uppercase tracking-widest text-[10px]">
-                    <tr><th class="px-3 py-4 text-left">Info</th><th class="px-3 py-4 text-left">Route</th><th class="px-3 py-4">KM</th><th class="px-3 py-4 bg-blue-800">Trip</th><th class="px-3 py-4">Action</th></tr>
+                    <tr>
+                        <th class="px-3 py-4 text-left">Info</th>
+                        <th class="px-3 py-4 text-left">Route</th>
+                        <th class="px-3 py-4">KM</th>
+                        <th class="px-3 py-4 bg-blue-800">Trip</th>
+                        <th class="px-3 py-4">Action</th>
+                    </tr>
                 </thead>
                 <tbody id="recordTable" class="text-center divide-y divide-slate-100"></tbody>
             </table>
