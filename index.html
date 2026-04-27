@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tom Tom Mileage Record</title>
+    <title>Tom Tom Mileage Record 🚗</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -32,22 +32,36 @@
 
         document.getElementById('date').valueAsDate = new Date();
 
-        onSnapshot(query(mileageCol, orderBy("timestamp", "desc")), (snapshot) => {
+        // 監聽數據變化
+        onSnapshot(query(mileageCol), (snapshot) => {
             let totalBusinessKM = 0;
             let latestEndKM = INITIAL_KM;
-            tableBody.innerHTML = '';
-            window.allRecords = [];
+            let allRecords = [];
             
             snapshot.forEach((doc) => {
                 const data = doc.data();
-                const id = doc.id;
-                const isOngoing = !data.end || data.end === 0;
-                
-                if (!isOngoing) {
-                    totalBusinessKM += data.total;
+                allRecords.push({ id: doc.id, ...data });
+                if (data.end && data.end > 0) {
+                    totalBusinessKM += (data.end - data.start);
                     if (data.end > latestEndKM) latestEndKM = data.end;
                 }
-                window.allRecords.push({id, ...data});
+            });
+
+            // 核心排序邏輯：1. 未完成排最前 2. 已完成按 Ending KM 降序
+            allRecords.sort((a, b) => {
+                const aFinished = a.end && a.end > 0;
+                const bFinished = b.end && b.end > 0;
+                if (!aFinished && bFinished) return -1;
+                if (aFinished && !bFinished) return 1;
+                return b.end - a.end; 
+            });
+
+            window.allRecords = allRecords; 
+            tableBody.innerHTML = '';
+            
+            allRecords.forEach((data) => {
+                const id = data.id;
+                const isOngoing = !data.end || data.end === 0;
                 
                 const row = `
                 <tr class="${isOngoing ? 'bg-amber-50 animate-pulse' : ''}">
@@ -56,24 +70,24 @@
                         <div class="text-slate-500 text-xs">${data.purpose}</div>
                     </td>
                     <td class="px-3 py-4 border-b text-slate-600 text-xs text-left">
-                        <div class="mb-1"><span class="font-bold text-slate-400">FROM:</span> ${data.from}</div>
-                        <div><span class="font-bold text-slate-400">TO:</span> ${data.to}</div>
+                        <div class="mb-1"><span class="font-bold text-slate-400 uppercase">From:</span> ${data.from}</div>
+                        <div><span class="font-bold text-slate-400 uppercase">To:</span> ${data.to}</div>
                     </td>
                     <td class="px-3 py-4 border-b text-center text-slate-500 text-xs">
                         S: ${data.start}<br>E: ${isOngoing ? '---' : data.end}
                     </td>
                     <td class="px-3 py-4 border-b text-center font-bold text-blue-700 bg-blue-50 border-x text-base">
-                        ${isOngoing ? '<span class="text-slate-300 italic text-[10px]">PENDING</span>' : data.total}
+                        ${isOngoing ? '<span class="text-amber-600 italic text-[10px]">IN PROGRESS</span>' : (data.end - data.start).toFixed(1)}
                     </td>
                     <td class="px-3 py-4 border-b text-center">
                         <div class="flex flex-col items-center gap-2">
-                            ${isOngoing ? `<button onclick="fillEnd('${id}', '${data.from}', '${data.to}', ${data.start})" class="bg-amber-500 text-white w-full py-1 rounded shadow-sm text-[10px] font-black uppercase">Finish</button>` : ''}
+                            ${isOngoing ? `<button onclick="fillEnd('${id}')" class="bg-amber-500 text-white w-full py-1 rounded shadow-sm text-[10px] font-black uppercase">Finish</button>` : ''}
                             <div class="flex gap-2">
-                                <button onclick="editRecord('${id}')" class="bg-blue-600 text-white p-2 rounded-lg shadow-sm hover:bg-blue-700">
+                                <button onclick="editRecord('${id}')" class="bg-blue-600 text-white p-2 rounded-lg shadow-sm hover:bg-blue-700 transition-colors">
                                     <span class="text-sm">✎</span>
                                 </button>
-                                <button onclick="deleteCloudRecord('${id}')" class="bg-red-500 text-white p-2 rounded-lg shadow-sm hover:bg-red-600">
-                                    <span class="text-sm">✕</span>
+                                <button onclick="deleteCloudRecord('${id}')" class="bg-red-500 text-white p-2 rounded-lg shadow-sm hover:bg-red-600 transition-colors">
+                                    <span class="text-sm">❌</span>
                                 </button>
                             </div>
                         </div>
@@ -82,11 +96,12 @@
                 tableBody.innerHTML += row;
             });
 
+            // 計算 Business Mileage Ratio
             const totalDriven = latestEndKM - INITIAL_KM;
             const ratio = totalDriven > 0 ? ((totalBusinessKM / totalDriven) * 100).toFixed(1) : 0;
 
             totalYearlyDisplay.innerText = `Business: ${totalBusinessKM.toFixed(1)} km`;
-            ratioDisplay.innerText = `Ratio: ${ratio}%`;
+            ratioDisplay.innerText = `Business Mileage Ratio: ${ratio}%`;
         });
 
         window.editRecord = (id) => {
@@ -99,15 +114,15 @@
             document.getElementById('endKm').value = record.end || "";
             document.getElementById('purposeSelect').value = record.purpose;
             window.editingId = id;
-            submitBtn.innerText = "Update Record";
+            submitBtn.innerText = "Update Record ✎";
             submitBtn.classList.replace('bg-blue-700', 'bg-blue-500');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
 
-        window.fillEnd = (id, from, to, start) => {
+        window.fillEnd = (id) => {
             editRecord(id);
             document.getElementById('endKm').focus();
-            submitBtn.innerText = "Complete Trip & Update";
+            submitBtn.innerText = "Complete Trip & Update ✅";
             submitBtn.classList.replace('bg-blue-500', 'bg-amber-600');
         };
 
@@ -121,7 +136,6 @@
                 end: parseFloat(document.getElementById('endKm').value) || 0,
                 purpose: document.getElementById('purposeSelect').value === 'Other' ? document.getElementById('otherPurpose').value : document.getElementById('purposeSelect').value
             };
-            data.total = data.end ? (data.end - data.start) : 0;
 
             try {
                 if (window.editingId) {
@@ -138,18 +152,18 @@
         });
 
         window.deleteCloudRecord = async (id) => {
-            if(confirm('Delete record?')) await deleteDoc(doc(db, "records", id));
+            if(confirm('Confirm Delete?')) await deleteDoc(doc(db, "records", id));
         };
 
         window.generateReport = () => {
             let csvContent = "\uFEFFDate,From,To,Purpose,Start,End,Total\n";
-            window.allRecords.filter(r => r.end > 0).sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(r => {
-                csvContent += `${r.date},${r.from},${r.to},${r.purpose},${r.start},${r.end},${r.total}\n`;
+            window.allRecords.filter(r => r.end > 0).forEach(r => {
+                csvContent += `${r.date},${r.from},${r.to},${r.purpose},${r.start},${r.end},${(r.end - r.start).toFixed(1)}\n`;
             });
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", "Mileage_Report_2026.csv");
+            link.setAttribute("download", "TomTom_Mileage_2026.csv");
             link.click();
         };
 
@@ -171,10 +185,10 @@
                 </select>
                 <input type="text" id="otherPurpose" placeholder="Describe..." class="hidden mt-2 block w-full border-blue-200 rounded-xl p-3 bg-blue-50">
             </div>
-            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">From</label><input type="text" id="fromLoc" required class="mt-1 block w-full border-slate-300 rounded-xl p-3"></div>
-            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">To</label><input type="text" id="toLoc" required class="mt-1 block w-full border-slate-300 rounded-xl p-3"></div>
+            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">From</label><input type="text" id="fromLoc" required class="mt-1 block w-full border-slate-300 rounded-xl p-3" placeholder="Starting point"></div>
+            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">To</label><input type="text" id="toLoc" required class="mt-1 block w-full border-slate-300 rounded-xl p-3" placeholder="Destination"></div>
             <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Start KM</label><input type="number" id="startKm" required class="mt-1 block w-full border-slate-300 rounded-xl p-3"></div>
-            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">End KM</label><input type="number" id="endKm" class="mt-1 block w-full border-slate-300 rounded-xl p-3"></div>
+            <div><label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">End KM</label><input type="number" id="endKm" class="mt-1 block w-full border-slate-300 rounded-xl p-3" placeholder="Enter after trip"></div>
             <div class="md:col-span-2 pt-2"><button type="submit" id="submitBtn" class="w-full bg-blue-700 text-white font-black py-4 rounded-2xl text-lg shadow-xl uppercase tracking-widest">Start Trip / Add Record</button></div>
         </form>
 
@@ -182,7 +196,7 @@
             <h2 class="text-lg font-black text-slate-700 uppercase tracking-tight">🚗🚗2026 record</h2>
             <div class="flex gap-2">
                 <div id="totalYearly" class="text-blue-900 font-black bg-blue-50 px-4 py-2 rounded-full border border-blue-100 text-[10px] shadow-sm">Business: 0 km</div>
-                <div id="ratioDisplay" class="text-emerald-700 font-black bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 text-[10px] shadow-sm">Ratio: 0%</div>
+                <div id="ratioDisplay" class="text-emerald-700 font-black bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 text-[10px] shadow-sm">Business Mileage Ratio: 0%</div>
             </div>
             <button onclick="generateReport()" class="bg-slate-800 text-white px-6 py-2 rounded-full font-bold text-[10px] uppercase tracking-widest">Export</button>
         </div>
