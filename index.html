@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -46,22 +46,22 @@
                 }
             });
 
-            // 1. Logic Sorting: Oldest to Newest to check for Mileage Gaps
+            // 1. 核心邏輯：先按時間物理順序排序（由舊到新），用來對比里程連續性
             rawData.sort((a, b) => new Date(a.date) - new Date(b.date) || a.timestamp - b.timestamp);
             
-            let lastEnding = INITIAL_KM;
+            let lastEndingRef = INITIAL_KM;
             let processedRecords = rawData.map(rec => {
-                // RULE: Only red if CURRENT START > PREVIOUS ENDING
-                const hasGap = rec.start > lastEnding;
+                // 檢查合理性：當前起點 > 任何上一筆的終點 = 斷軌
+                const hasGap = rec.start > lastEndingRef;
                 
-                // Only update the reference point if the trip is finished
+                // 只有已完成的行程才更新下一次對比的基準點
                 if (rec.end && rec.end > 0) {
-                    lastEnding = rec.end;
+                    lastEndingRef = rec.end;
                 }
                 return { ...rec, hasGap };
             });
 
-            // 2. Display Sorting: Pending trips first, then Ending KM Descending
+            // 2. 顯示排序：Pending 放在最頂，其餘按公里數降序排列
             processedRecords.sort((a, b) => {
                 const aFinished = a.end && a.end > 0;
                 const bFinished = b.end && b.end > 0;
@@ -77,13 +77,10 @@
                 const id = data.id;
                 const isOngoing = !data.end || data.end === 0;
                 
-                // Styling Logic
+                // 決定顏色：斷軌則顯示淺紅色背景
                 let rowBg = "bg-white";
-                if (isOngoing) {
-                    rowBg = "bg-amber-50 animate-pulse";
-                } else if (data.hasGap) {
-                    rowBg = "bg-red-100"; // Highlight if Start > Prev End
-                }
+                if (isOngoing) rowBg = "bg-amber-50 animate-pulse";
+                else if (data.hasGap) rowBg = "bg-red-100"; 
 
                 const row = `
                 <tr class="${rowBg} transition-colors">
@@ -106,10 +103,10 @@
                         <div class="flex flex-col items-center gap-2">
                             ${isOngoing ? `<button onclick="fillEnd('${id}')" class="bg-amber-500 text-white w-full py-1 rounded shadow-sm text-[10px] font-black uppercase">Finish</button>` : ''}
                             <div class="flex gap-2">
-                                <button onclick="editRecord('${id}')" class="bg-blue-600 text-white p-2 rounded-lg shadow-sm hover:bg-blue-700 transition-all">
+                                <button onclick="editRecord('${id}')" class="bg-blue-600 text-white p-2 rounded-lg shadow-sm hover:bg-blue-700">
                                     <span class="text-sm">✎</span>
                                 </button>
-                                <button onclick="deleteCloudRecord('${id}')" class="bg-red-500 text-white p-2 rounded-lg shadow-sm hover:bg-red-600 transition-all">
+                                <button onclick="deleteCloudRecord('${id}')" class="bg-red-500 text-white p-2 rounded-lg shadow-sm hover:bg-red-600">
                                     <span class="text-sm">❌</span>
                                 </button>
                             </div>
@@ -119,7 +116,6 @@
                 tableBody.innerHTML += row;
             });
 
-            // Ratio calculation based on initial mileage
             const totalDriven = latestEndKM - INITIAL_KM;
             const ratio = totalDriven > 0 ? ((totalBusinessKM / totalDriven) * 100).toFixed(1) : 0;
 
@@ -175,7 +171,7 @@
         });
 
         window.deleteCloudRecord = async (id) => {
-            if(confirm('Delete this record?')) await deleteDoc(doc(db, "records", id));
+            if(confirm('Delete?')) await deleteDoc(doc(db, "records", id));
         };
 
         window.generateReport = () => {
@@ -227,13 +223,7 @@
         <div class="overflow-hidden border border-slate-200 rounded-2xl shadow-sm">
             <table class="min-w-full bg-white text-sm">
                 <thead class="bg-slate-900 text-white text-center uppercase tracking-widest text-[10px]">
-                    <tr>
-                        <th class="px-3 py-4 text-left">Info</th>
-                        <th class="px-3 py-4 text-left">Route</th>
-                        <th class="px-3 py-4">KM</th>
-                        <th class="px-3 py-4 bg-blue-800">Trip</th>
-                        <th class="px-3 py-4">Action</th>
-                    </tr>
+                    <tr><th class="px-3 py-4 text-left">Info</th><th class="px-3 py-4 text-left">Route</th><th class="px-3 py-4">KM</th><th class="px-3 py-4 bg-blue-800">Trip</th><th class="px-3 py-4">Action</th></tr>
                 </thead>
                 <tbody id="recordTable" class="text-center divide-y divide-slate-100"></tbody>
             </table>
